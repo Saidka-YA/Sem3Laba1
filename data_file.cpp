@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <sstream>
+#include <cstring>
 
 using namespace std;
 
@@ -42,9 +43,25 @@ void writeRecord(stringstream& json, bool& first, const string& type,
 void writeTree(stringstream& json, bool& first, const string& name, RBNode* node)
 {
 	if (node == nullptr) return;
+	if (!first) json << ',';
+	first = false;
+	json << "{\"type\":\"T\",\"name\":";
+	writeString(json, name);
+	json << ",\"value\":" << node->key
+		<< ",\"color\":" << node->color << ",\"parent\":";
+	if (node->parent == nullptr) json << "null";
+	else json << node->parent->key;
+	json << '}';
 	writeTree(json, first, name, node->left);
-	writeRecord(json, first, "T", name, to_string(node->key), true);
 	writeTree(json, first, name, node->right);
+}
+
+void writeBinaryTree(stringstream& json, bool& first, const string& name, BSTNode* node)
+{
+	if (node == nullptr) return;
+	writeBinaryTree(json, first, name, node->left);
+	writeRecord(json, first, "B", name, to_string(node->data), true);
+	writeBinaryTree(json, first, name, node->right);
 }
 
 void writeStack(stringstream& json, bool& first, const string& name, StackNode* node)
@@ -103,17 +120,31 @@ bool readInteger(const char*& cursor, int& value)
 	return true;
 }
 
-bool readRecord(const char*& cursor, string& type, string& name,
-	string& value, int& key)
+bool readRecord(const char*& cursor, string& type, string& name, string& value,
+	int& key, int& color, bool& hasParent, int& parentKey, bool& hasTreeShape)
 {
 	string field;
+	hasParent = false;
+	hasTreeShape = false;
 	if (!expect(cursor, '{') || !readString(cursor, field) || field != "type" ||
 		!expect(cursor, ':') || !readString(cursor, type) || !expect(cursor, ',') ||
 		!readString(cursor, field) || field != "name" || !expect(cursor, ':') ||
 		!readString(cursor, name) || !expect(cursor, ',') || !readString(cursor, field) ||
 		field != "value" || !expect(cursor, ':')) return false;
-	if (type == "T") return readInteger(cursor, key) && expect(cursor, '}');
-	return readString(cursor, value) && expect(cursor, '}');
+	if (type != "T" && type != "B") return readString(cursor, value) && expect(cursor, '}');
+	if (!readInteger(cursor, key)) return false;
+	if (type == "B") return expect(cursor, '}');
+	skipSpaces(cursor);
+	if (*cursor == '}') { ++cursor; return true; }
+	if (!expect(cursor, ',') || !readString(cursor, field) || field != "color" ||
+		!expect(cursor, ':') || !readInteger(cursor, color) || !expect(cursor, ',') ||
+		!readString(cursor, field) || field != "parent" || !expect(cursor, ':')) return false;
+	skipSpaces(cursor);
+	if (strncmp(cursor, "null", 4) == 0) cursor += 4;
+	else { if (!readInteger(cursor, parentKey)) return false; hasParent = true; }
+	if (!expect(cursor, '}')) return false;
+	hasTreeShape = true;
+	return true;
 }
 
 void deleteTree(RBNode* tree)
@@ -124,7 +155,15 @@ void deleteTree(RBNode* tree)
 	delete tree;
 }
 
-} // namespace
+void deleteBinaryTree(BSTNode* tree)
+{
+	if (tree == nullptr) return;
+	deleteBinaryTree(tree->left);
+	deleteBinaryTree(tree->right);
+	delete tree;
+}
+
+} 
 
 bool saveProgramData(ProgramData* data, const string& fileName, string& error)
 {
@@ -142,9 +181,14 @@ bool saveProgramData(ProgramData* data, const string& fileName, string& error)
 			writeRecord(json, first, "L", it->first, node->data);
 	for (map<string, StackData*>::iterator it = data->stacks.begin(); it != data->stacks.end(); ++it)
 		writeStack(json, first, it->first, it->second->head);
-	for (map<string, DoubleQueueData*>::iterator it = data->queues.begin(); it != data->queues.end(); ++it)
-		for (DoubleQueueNode* node = it->second->head; node != nullptr; node = node->nextEl)
+	for (map<string, QueueData*>::iterator it = data->queues.begin(); it != data->queues.end(); ++it)
+		for (QueueNode* node = it->second->head; node != nullptr; node = node->nextEl)
 			writeRecord(json, first, "Q", it->first, node->data);
+	for (map<string, DoubleQueueData*>::iterator it = data->doubleQueues.begin(); it != data->doubleQueues.end(); ++it)
+		for (DoubleQueueNode* node = it->second->head; node != nullptr; node = node->nextEl)
+			writeRecord(json, first, "D", it->first, node->data);
+	for (map<string, BSTNode*>::iterator it = data->binaryTrees.begin(); it != data->binaryTrees.end(); ++it)
+		writeBinaryTree(json, first, it->first, it->second);
 	for (map<string, RBNode*>::iterator it = data->trees.begin(); it != data->trees.end(); ++it)
 		writeTree(json, first, it->first, it->second);
 	json << ']';
@@ -162,8 +206,9 @@ bool loadProgramData(ProgramData* data, const string& fileName, string& error)
 	while (*cursor != ']')
 	{
 		string type, name, value;
-		int key = 0;
-		if (!readRecord(cursor, type, name, value, key))
+		int key = 0, color = BLACK, parentKey = 0;
+		bool hasParent = false, hasTreeShape = false;
+		if (!readRecord(cursor, type, name, value, key, color, hasParent, parentKey, hasTreeShape))
 		{
 			error = "Не удалось прочитать элемент JSON.";
 			return false;
@@ -200,20 +245,44 @@ bool loadProgramData(ProgramData* data, const string& fileName, string& error)
 		{
 			if (data->queues.find(name) == data->queues.end())
 			{
-				data->queues[name] = new DoubleQueueData;
-				DQINIT(data->queues[name]);
+				data->queues[name] = new QueueData;
+				QINIT(data->queues[name]);
 			}
-			DQPUSH(data->queues[name], value);
+			QPUSH(data->queues[name], value);
 		}
-		else if (type == "T") data->trees[name] = TINSERT(data->trees[name], key);
+		else if (type == "D")
+		{
+			if (data->doubleQueues.find(name) == data->doubleQueues.end())
+			{
+				data->doubleQueues[name] = new DoubleQueueData;
+				DQINIT(data->doubleQueues[name]);
+			}
+			DQPUSH(data->doubleQueues[name], value);
+		}
+		else if (type == "B") data->binaryTrees[name] = BSTINSERT(data->binaryTrees[name], key);
+		else if (type == "T")
+		{
+			if (hasTreeShape) 
+				data->trees[name] = TRESTORE(data->trees[name], key, static_cast<Color>(color), hasParent, parentKey);
+			else data->trees[name] = TINSERT(data->trees[name], key);
+		}
 		else { error = "Неизвестный тип структуры в JSON."; return false; }
 		skipSpaces(cursor);
 		if (*cursor == ']') break;
-		if (!expect(cursor, ',')) { error = "Ошибка между элементами JSON."; return false; }
+		if (!expect(cursor, ',')) { 
+			error = "Ошибка между элементами JSON."; 
+			return false; 
+		}
 	}
-	if (!expect(cursor, ']')) { error = "Не закрыт JSON-массив."; return false; }
+	if (!expect(cursor, ']')) { 
+		error = "Не закрыт JSON-массив."; 
+		return false; 
+	}
 	skipSpaces(cursor);
-	if (*cursor != '\0') { error = "Лишние данные после JSON-массива."; return false; }
+	if (*cursor != '\0') { 
+		error = "Лишние данные после JSON-массива."; 
+		return false; 
+	}
 	return true;
 }
 
@@ -236,11 +305,18 @@ void clearProgramData(ProgramData* data)
 		SCLEAR(it->second);
 		delete it->second;
 	}
-	for (map<string, DoubleQueueData*>::iterator it = data->queues.begin(); it != data->queues.end(); ++it)
+	for (map<string, QueueData*>::iterator it = data->queues.begin(); it != data->queues.end(); ++it)
+	{
+		QCLEAR(it->second);
+		delete it->second;
+	}
+	for (map<string, DoubleQueueData*>::iterator it = data->doubleQueues.begin(); it != data->doubleQueues.end(); ++it)
 	{
 		DQCLEAR(it->second);
 		delete it->second;
 	}
+	for (map<string, BSTNode*>::iterator it = data->binaryTrees.begin(); it != data->binaryTrees.end(); ++it)
+		deleteBinaryTree(it->second);
 	for (map<string, RBNode*>::iterator it = data->trees.begin(); it != data->trees.end(); ++it)
 		deleteTree(it->second);
 	data->arrays.clear();
@@ -248,5 +324,7 @@ void clearProgramData(ProgramData* data)
 	data->doubleLists.clear();
 	data->stacks.clear();
 	data->queues.clear();
+	data->doubleQueues.clear();
+	data->binaryTrees.clear();
 	data->trees.clear();
 }

@@ -2,450 +2,315 @@
 
 #include <cstdlib>
 #include <iostream>
-#include <vector>
 
 using namespace std;
 
-bool readInt(const string& text, int& value)
+static MArray* getArray(ProgramData* d, const string& n)
 {
-	value = atoi(text.c_str());
-	return true;
+	if (!d->arrays.count(n)) { d->arrays[n] = new MArray; MINIT(d->arrays[n]); }
+	return d->arrays[n];
 }
 
-MArray* getArray(ProgramData* data, const string& name)
+static FNode*& singleList(ProgramData* d, const string& n) { return d->singleLists[n]; }
+
+static DoublyLinkedList* doubleList(ProgramData* d, const string& n)
 {
-	if (data->arrays.find(name) == data->arrays.end())
-	{
-		MArray* array = new MArray;
-		MINIT(array);
-		data->arrays[name] = array;
+	if (!d->doubleLists.count(n)) { 
+		d->doubleLists[n] = new DoublyLinkedList; 
+		LINIT(d->doubleLists[n]); 
 	}
-	return data->arrays[name];
+	return d->doubleLists[n];
 }
 
-FNode*& getSingleList(ProgramData* data, const string& name)
+static StackData* stack(ProgramData* d, const string& n)
 {
-	return data->singleLists[name];
-}
-
-DoublyLinkedList* getDoubleList(ProgramData* data, const string& name)
-{
-	if (data->doubleLists.find(name) == data->doubleLists.end())
-	{
-		DoublyLinkedList* list = new DoublyLinkedList;
-		LINIT(list);
-		data->doubleLists[name] = list;
+	if (!d->stacks.count(n)) { 
+		d->stacks[n] = new StackData; 
+		SINIT(d->stacks[n]); 
 	}
-	return data->doubleLists[name];
+	return d->stacks[n];
 }
 
-StackData* getStack(ProgramData* data, const string& name)
+static QueueData* queue(ProgramData* d, const string& n)
 {
-	if (data->stacks.find(name) == data->stacks.end())
-	{
-		StackData* stack = new StackData;
-		SINIT(stack);
-		data->stacks[name] = stack;
+	if (!d->queues.count(n)) { 
+		d->queues[n] = new QueueData; 
+		QINIT(d->queues[n]); 
 	}
-	return data->stacks[name];
+	return d->queues[n];
 }
 
-DoubleQueueData* getQueue(ProgramData* data, const string& name)
+static DoubleQueueData* doubleQueue(ProgramData* d, const string& n)
 {
-	if (data->queues.find(name) == data->queues.end())
-	{
-		DoubleQueueData* queue = new DoubleQueueData;
-		DQINIT(queue);
-		data->queues[name] = queue;
+	if (!d->doubleQueues.count(n)) { 
+		d->doubleQueues[n] = new DoubleQueueData; 
+		DQINIT(d->doubleQueues[n]); 
 	}
-	return data->queues[name];
+	return d->doubleQueues[n];
 }
 
-RBNode*& getTree(ProgramData* data, const string& name)
+static void printType(ProgramData* d, const string& type)
 {
-	return data->trees[name];
+	for (map<string, MArray*>::iterator i=d->arrays.begin(); i!=d->arrays.end(); ++i)
+		if (type=="M" || type=="ALL") { 
+			cout << i->first << ": "; 
+			MPRINT(i->second); 
+		}
+	for (map<string, FNode*>::iterator i=d->singleLists.begin(); i!=d->singleLists.end(); ++i)
+		if (type=="F" || type=="ALL") { 
+			cout << i->first << ":\n"; 
+			FPRINT(i->second); FPRINTREVERSE(i->second);
+		}
+	for (map<string, DoublyLinkedList*>::iterator i=d->doubleLists.begin(); i!=d->doubleLists.end(); ++i)
+		if (type=="L" || type=="ALL") { 
+			cout << i->first << ":\n"; 
+			LPRINT(i->second); LPRINTREVERSE(i->second); 
+		}
+	for (map<string, StackData*>::iterator i=d->stacks.begin(); i!=d->stacks.end(); ++i)
+		if (type=="S" || type=="ALL") { 
+			cout << i->first << ":\n"; 
+			SPRINT(i->second); 
+		}
+	for (map<string, QueueData*>::iterator i=d->queues.begin(); i!=d->queues.end(); ++i)
+		if (type=="Q" || type=="ALL") { 
+			cout << i->first << ":\n"; 
+			QPRINT(i->second); 
+		}
+	for (map<string, DoubleQueueData*>::iterator i=d->doubleQueues.begin(); i!=d->doubleQueues.end(); ++i)
+		if (type=="D" || type=="ALL") { 
+			cout << i->first << ":\n"; 
+			DQPRINT(i->second); 
+		}
+	for (map<string, BSTNode*>::iterator i=d->binaryTrees.begin(); i!=d->binaryTrees.end(); ++i)
+		if (type=="B" || type=="ALL") { 
+			cout << i->first << ": "; 
+			BSTINORDER(i->second); cout << endl; 
+		}
+	for (map<string, RBNode*>::iterator i=d->trees.begin(); i!=d->trees.end(); ++i)
+		if (type=="T" || type=="ALL") { 
+			cout << i->first << ":\n"; 
+			TPRINT(i->second); 
+		}
 }
 
-bool hasArgs(const vector<string>& words, size_t count, string& error)
+bool RunCommand(ProgramData* d, const vector<string>& w, bool& changed, string& error)
 {
-	if (words.size() == count) return true;
-	error = "Неверное количество аргументов.";
-	return false;
-}
-
-bool getIndex(const vector<string>& words, int& index, string& error)
-{
-	if (words.size() < 3 || !readInt(words[2], index))
-	{
-		error = "Индекс должен быть целым числом.";
+	if (w.empty()) { 
+		error = "Пустая команда."; 
 		return false;
 	}
-	return true;
-}
-
-bool RunMPush(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	MPUSH(getArray(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunMInsert(ProgramData* data, const vector<string>& words, string& error)
-{
-	int index;
-	if (!hasArgs(words, 4, error) || !getIndex(words, index, error)) return false;
-	MINSERT(getArray(data, words[1]), index, words[3]);
-	return true;
-}
-
-bool RunMGet(ProgramData* data, const vector<string>& words, string& error)
-{
-	int index;
-	if (!hasArgs(words, 3, error) || !getIndex(words, index, error)) return false;
-	cout << "-> " << MGET(getArray(data, words[1]), index) << endl;
-	return true;
-}
-
-bool RunMDel(ProgramData* data, const vector<string>& words, string& error)
-{
-	int index;
-	if (!hasArgs(words, 3, error) || !getIndex(words, index, error)) return false;
-	MDEL(getArray(data, words[1]), index);
-	return true;
-}
-
-bool RunMSet(ProgramData* data, const vector<string>& words, string& error)
-{
-	int index;
-	if (!hasArgs(words, 4, error) || !getIndex(words, index, error)) return false;
-	MREPLACE(getArray(data, words[1]), index, words[3]);
-	return true;
-}
-
-bool RunMLen(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 2, error)) return false;
-	cout << "-> " << MLENGTH(getArray(data, words[1])) << endl;
-	return true;
-}
-
-bool RunFPushHead(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	FPUSHHEAD(getSingleList(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunFPushTail(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	FPUSHTAIL(getSingleList(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunFPushAfter(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 4, error)) return false;
-	FNode* node = FGET(getSingleList(data, words[1]), words[2]);
-	if (node == nullptr) { error = "Опорный элемент не найден."; return false; }
-	FINSERTAFTER(node, words[3]);
-	return true;
-}
-
-bool RunFPushBefore(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 4, error)) return false;
-	FNode*& head = getSingleList(data, words[1]);
-	FINSERTBEFORE(head, FGET(head, words[2]), words[3]);
-	return true;
-}
-
-bool RunFDelHead(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 2, error)) return false;
-	FDELHEAD(getSingleList(data, words[1]));
-	return true;
-}
-
-bool RunFDelTail(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 2, error)) return false;
-	FDELTAIL(getSingleList(data, words[1]));
-	return true;
-}
-
-bool RunFDelAfter(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	FNode* node = FGET(getSingleList(data, words[1]), words[2]);
-	if (node == nullptr || node->nextEl == nullptr) { error = "Элемент для удаления не найден."; return false; }
-	FDELAFTER(node);
-	return true;
-}
-
-bool RunFDelBefore(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	FNode*& head = getSingleList(data, words[1]);
-	FDELBEFORE(head, FGET(head, words[2]));
-	return true;
-}
-
-bool RunFDelVal(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	FDELVALUE(getSingleList(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunFGet(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	FNode* node = FGET(getSingleList(data, words[1]), words[2]);
-	if (node == nullptr) cout << "-> FALSE" << endl;
-	else cout << "-> " << node->data << endl;
-	return true;
-}
-
-bool RunLPushHead(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	LPUSHHEAD(getDoubleList(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunLPushTail(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	LPUSHTAIL(getDoubleList(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunLPushAfter(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 4, error)) return false;
-	DoublyLinkedList* list = getDoubleList(data, words[1]);
-	LINSERTAFTER(list, LGET(list, words[2]), words[3]);
-	return true;
-}
-
-bool RunLPushBefore(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 4, error)) return false;
-	DoublyLinkedList* list = getDoubleList(data, words[1]);
-	LINSERTBEFORE(list, LGET(list, words[2]), words[3]);
-	return true;
-}
-
-bool RunLDelHead(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 2, error)) return false;
-	LDELHEAD(getDoubleList(data, words[1]));
-	return true;
-}
-
-bool RunLDelTail(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 2, error)) return false;
-	LDELTAIL(getDoubleList(data, words[1]));
-	return true;
-}
-
-bool RunLDelAfter(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	DoublyLinkedList* list = getDoubleList(data, words[1]);
-	LNode* node = LGET(list, words[2]);
-	if (node == nullptr || node->nextEl == nullptr) { error = "Элемент для удаления не найден."; return false; }
-	LDELNODE(list, node->nextEl);
-	return true;
-}
-
-bool RunLDelBefore(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	DoublyLinkedList* list = getDoubleList(data, words[1]);
-	LNode* node = LGET(list, words[2]);
-	if (node == nullptr || node->prevEl == nullptr) { error = "Элемент для удаления не найден."; return false; }
-	LDELNODE(list, node->prevEl);
-	return true;
-}
-
-bool RunLDelVal(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	LDELVALUE(getDoubleList(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunLGet(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	LNode* node = LGET(getDoubleList(data, words[1]), words[2]);
-	if (node == nullptr) cout << "-> FALSE" << endl;
-	else cout << "-> " << node->data << endl;
-	return true;
-}
-
-bool RunSPush(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	SPUSH(getStack(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunSPop(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 2, error)) return false;
-	cout << "-> " << SPOP(getStack(data, words[1])) << endl;
-	return true;
-}
-
-bool RunQPush(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 3, error)) return false;
-	DQPUSH(getQueue(data, words[1]), words[2]);
-	return true;
-}
-
-bool RunQPop(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (!hasArgs(words, 2, error)) return false;
-	cout << "-> " << DQPOP(getQueue(data, words[1])) << endl;
-	return true;
-}
-
-bool RunTInsert(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (words.size() != 3) { error = "Укажите имя дерева и ключ."; return false; }
-	int key;
-	if (!readInt(words[2], key)) { error = "Ключ должен быть целым числом."; return false; }
-	RBNode*& tree = getTree(data, words[1]);
-	tree = TINSERT(tree, key);
-	return true;
-}
-
-bool RunTDel(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (words.size() != 3) { error = "Укажите имя дерева и ключ."; return false; }
-	int key;
-	if (!readInt(words[2], key)) { error = "Ключ должен быть целым числом."; return false; }
-	RBNode*& tree = getTree(data, words[1]);
-	tree = TDEL(tree, key);
-	return true;
-}
-
-bool RunTGet(ProgramData* data, const vector<string>& words, string& error)
-{
-	if (words.size() != 3) { error = "Укажите имя дерева и ключ."; return false; }
-	int key;
-	if (!readInt(words[2], key)) { error = "Ключ должен быть целым числом."; return false; }
-	cout << "-> " << (TGET(getTree(data, words[1]), key) == nullptr ? "FALSE" : "TRUE") << endl;
-	return true;
-}
-
-void printType(ProgramData* data, const string& type)
-{
-	if (type == "M" || type == "ALL") for (map<string, MArray*>::iterator it = data->arrays.begin(); it != data->arrays.end(); ++it)
-	{
-		cout << it->first << ": "; MPRINT(it->second);
+	const string& c=w[0];
+	if (c=="HELP") { 
+		RunHelp(); 
+		return true; 
 	}
-	if (type == "F" || type == "ALL") for (map<string, FNode*>::iterator it = data->singleLists.begin(); it != data->singleLists.end(); ++it)
+	if (c=="EXIT") return true;
+	if (c=="PRINT")
 	{
-		cout << it->first << ":\n"; FPRINT(it->second); FPRINTREVERSE(it->second);
+		if (w.size()==1) printType(d,"ALL");
+		else if (w.size()==2 && (w[1]=="ALL" || w[1]=="M" || w[1]=="F" || w[1]=="L" || w[1]=="S" || w[1]=="Q" || w[1]=="D" || w[1]=="B" || w[1]=="T")) printType(d,w[1]);
+		else if (w.size()==2 && d->arrays.count(w[1])) MPRINT(d->arrays[w[1]]);
+		else if (w.size()==2 && d->singleLists.count(w[1])) FPRINT(d->singleLists[w[1]]);
+		else if (w.size()==2 && d->doubleLists.count(w[1])) LPRINT(d->doubleLists[w[1]]);
+		else if (w.size()==2 && d->stacks.count(w[1])) SPRINT(d->stacks[w[1]]);
+		else if (w.size()==2 && d->queues.count(w[1])) QPRINT(d->queues[w[1]]);
+		else if (w.size()==2 && d->doubleQueues.count(w[1])) DQPRINT(d->doubleQueues[w[1]]);
+		else if (w.size()==2 && d->binaryTrees.count(w[1])) { 
+			BSTINORDER(d->binaryTrees[w[1]]); 
+			cout << endl; 
+		}
+		else if (w.size()==2 && d->trees.count(w[1])) TPRINT(d->trees[w[1]]);
+		else { 
+			error="Неизвестная структура для PRINT."; 
+			return false; 
+		}
+		return true;
 	}
-	if (type == "L" || type == "ALL") for (map<string, DoublyLinkedList*>::iterator it = data->doubleLists.begin(); it != data->doubleLists.end(); ++it)
+	if (c=="MPUSH" && w.size()==3) { 
+		MPUSH(getArray(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="MINSERT" && w.size()==4) { 
+		MINSERT(getArray(d,w[1]),atoi(w[2].c_str()),w[3]); 
+		changed=true; 
+	}
+	else if (c=="MGET" && w.size()==3) cout << "-> " << MGET(getArray(d,w[1]),atoi(w[2].c_str())) << endl;
+	else if (c=="MDEL" && w.size()==3) { 
+		MDEL(getArray(d,w[1]),atoi(w[2].c_str())); 
+		changed=true; 
+	}
+	else if ((c=="MSET" || c=="MREPLACE") && w.size()==4) { 
+		MREPLACE(getArray(d,w[1]),atoi(w[2].c_str()),w[3]); 
+		changed=true; 
+	}
+	else if ((c=="MLEN" || c=="MLENGTH") && w.size()==2) cout << "-> " << MLENGTH(getArray(d,w[1])) << endl;
+	else if (c=="FPUSHHEAD" && w.size()==3) { 
+		FPUSHHEAD(singleList(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="FPUSHTAIL" && w.size()==3) { 
+		FPUSHTAIL(singleList(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="FPUSHAFTER" && w.size()==4) { 
+		FNode* n=FGET(singleList(d,w[1]),w[2]); 
+		if(n) FINSERTAFTER(n,w[3]); 
+		else { 
+			error="Опорный элемент не найден."; 
+			return false; 
+		} 
+		changed=true; 
+	}
+	else if (c=="FPUSHBEFORE" && w.size()==4) { 
+		FNode*& h=singleList(d,w[1]); 
+		FINSERTBEFORE(h,FGET(h,w[2]),w[3]); 
+		changed=true; 
+	}
+	else if (c=="FDELHEAD" && w.size()==2) { 
+		FDELHEAD(singleList(d,w[1])); 
+		changed=true; 
+	}
+	else if (c=="FDELTAIL" && w.size()==2) { 
+		FDELTAIL(singleList(d,w[1])); 
+		changed=true; 
+	}
+	else if (c=="FDELAFTER" && w.size()==3) { 
+		FNode* n=FGET(singleList(d,w[1]),w[2]); 
+		if(!n || !n->nextEl) { 
+			error="Элемент не найден."; 
+			return false; 
+		} 
+		FDELAFTER(n); 
+		changed=true; 
+	}
+	else if (c=="FDELBEFORE" && w.size()==3) { 
+		FNode*& h=singleList(d,w[1]); 
+		FDELBEFORE(h,FGET(h,w[2])); 
+		changed=true; 
+	}
+	else if ((c=="FDELVAL" || c=="FDELVALUE") && w.size()==3) { 
+		FDELVALUE(singleList(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="FGET" && w.size()==3) { 
+		FNode* n=FGET(singleList(d,w[1]),w[2]); 
+		cout << "-> " << (n?n->data:"FALSE") << endl; 
+	}
+	else if (c=="LPUSHHEAD" && w.size()==3) { 
+		LPUSHHEAD(doubleList(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="LPUSHTAIL" && w.size()==3) { 
+		LPUSHTAIL(doubleList(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="LPUSHAFTER" && w.size()==4) { 
+		DoublyLinkedList* l=doubleList(d,w[1]); 
+		LINSERTAFTER(l,LGET(l,w[2]),w[3]); 
+		changed=true; 
+	}
+	else if (c=="LPUSHBEFORE" && w.size()==4) { 
+		DoublyLinkedList* l=doubleList(d,w[1]); 
+		LINSERTBEFORE(l,LGET(l,w[2]),w[3]); 
+		changed=true; 
+	}
+	else if (c=="LDELHEAD" && w.size()==2) { 
+		LDELHEAD(doubleList(d,w[1])); 
+		changed=true; 
+	}
+	else if (c=="LDELTAIL" && w.size()==2) { 
+		LDELTAIL(doubleList(d,w[1])); 
+		changed=true; 
+	}
+	else if (c=="LDELAFTER" && w.size()==3) { 
+		DoublyLinkedList* l=doubleList(d,w[1]); 
+		LNode* n=LGET(l,w[2]); 
+		if(!n||!n->nextEl){
+			error="Элемент не найден.";
+			return false;
+		} 
+		LDELNODE(l,n->nextEl); 
+		changed=true; 
+	}
+	else if (c=="LDELBEFORE" && w.size()==3) { 
+		DoublyLinkedList* l=doubleList(d,w[1]); 
+		LNode* n=LGET(l,w[2]); 
+		if(!n||!n->prevEl){
+			error="Элемент не найден.";
+			return false;
+		} 
+		LDELNODE(l,n->prevEl); 
+		changed=true; }
+	else if ((c=="LDELVAL" || c=="LDELVALUE") && w.size()==3) { 
+		LDELVALUE(doubleList(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="LGET" && w.size()==3) { 
+		LNode* n=LGET(doubleList(d,w[1]),w[2]); 
+		cout << "-> " << (n?n->data:"FALSE") << endl; 
+	}
+	else if (c=="SPUSH" && w.size()==3) { 
+		SPUSH(stack(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="SPOP" && w.size()==2) { 
+		cout << "-> " << SPOP(stack(d,w[1])) << endl; 
+		changed=true; 
+	}
+	else if (c=="QPUSH" && w.size()==3) { 
+		QPUSH(queue(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="QPOP" && w.size()==2) { 
+		cout << "-> " << QPOP(queue(d,w[1])) << endl; 
+		changed=true; 
+	}
+	else if (c=="QGET" && w.size()==2) cout << "-> " << QGET(queue(d,w[1])) << endl;
+	else if (c=="DQPUSH" && w.size()==3) { 
+		DQPUSH(doubleQueue(d,w[1]),w[2]); 
+		changed=true; 
+	}
+	else if (c=="DQPOP" && w.size()==2) { 
+		cout << "-> " << DQPOP(doubleQueue(d,w[1])) << endl; 
+		changed=true; 
+	}
+	else if (c=="DQGET" && w.size()==2) cout << "-> " << DQGET(doubleQueue(d,w[1])) << endl;
+	else if ((c=="BINSERT" || c=="BDEL" || c=="BGET" || c=="TINSERT" || c=="TDEL" || c=="TGET" || c=="ISMEMBER") && w.size()==3)
 	{
-		cout << it->first << ":\n"; LPRINT(it->second); LPRINTREVERSE(it->second);
+		int key=atoi(w[2].c_str());
+		if (c=="BINSERT") { 
+			d->binaryTrees[w[1]]=BSTINSERT(d->binaryTrees[w[1]],key); 
+			changed=true; 
+		}
+		else if (c=="BDEL") { 
+			d->binaryTrees[w[1]]=BSTDELETE(d->binaryTrees[w[1]],key); 
+			changed=true; 
+		}
+		else if (c=="BGET") cout << "-> " << (BSTSEARCH(d->binaryTrees[w[1]],key)?"TRUE":"FALSE") << endl;
+		else if (c=="TINSERT") { 
+			d->trees[w[1]]=TINSERT(d->trees[w[1]],key); 
+			changed=true; 
+		}
+		else if (c=="TDEL") { 
+			d->trees[w[1]]=TDEL(d->trees[w[1]],key); 
+			changed=true; 
+		}
+		else cout << "-> " << (TGET(d->trees[w[1]],key)?"TRUE":"FALSE") << endl;
 	}
-	if (type == "S" || type == "ALL") for (map<string, StackData*>::iterator it = data->stacks.begin(); it != data->stacks.end(); ++it)
-	{
-		cout << it->first << ":\n"; SPRINT(it->second);
+	else { 
+		error="Неизвестная команда или неверное число аргументов."; 
+		return false; 
 	}
-	if (type == "Q" || type == "ALL") for (map<string, DoubleQueueData*>::iterator it = data->queues.begin(); it != data->queues.end(); ++it)
-	{
-		cout << it->first << ":\n"; DQPRINT(it->second);
-	}
-	if (type == "T" || type == "ALL") for (map<string, RBNode*>::iterator it = data->trees.begin(); it != data->trees.end(); ++it)
-	{
-		cout << it->first << ":\n"; TPRINT(it->second);
-	}
-}
-
-bool runPrint(const vector<string>& words, ProgramData* data, string& error)
-{
-	if (words.size() == 1) printType(data, "ALL");
-	else if (words.size() == 2 && (words[1] == "ALL" || words[1] == "M" || words[1] == "F" ||
-		words[1] == "L" || words[1] == "S" || words[1] == "Q" || words[1] == "T"))
-		printType(data, words[1]);
-	else if (words.size() == 2)
-	{
-		string name = words[1];
-		if (data->arrays.count(name)) MPRINT(data->arrays[name]);
-		else if (data->singleLists.count(name)) FPRINT(data->singleLists[name]);
-		else if (data->doubleLists.count(name)) LPRINT(data->doubleLists[name]);
-		else if (data->stacks.count(name)) SPRINT(data->stacks[name]);
-		else if (data->queues.count(name)) DQPRINT(data->queues[name]);
-		else if (data->trees.count(name)) TPRINT(data->trees[name]);
-		else { error = "Структура не найдена."; return false; }
-	}
-	else { error = "Использование: PRINT <имя|тип|ALL>."; return false; }
 	return true;
-}
-
-
-
-Command GetCommand(const std::string& name)
-{
-	if (name == "MPUSH") return Command::MPUSH;
-	if (name == "MINSERT") return Command::MINSERT;
-	if (name == "MGET") return Command::MGET;
-	if (name == "MDEL") return Command::MDEL;
-	if (name == "MSET" || name == "MREPLACE") return Command::MSET;
-	if (name == "MLEN" || name == "MLENGTH") return Command::MLEN;
-	if (name == "FPUSHHEAD") return Command::FPUSHHEAD;
-	if (name == "FPUSHTAIL") return Command::FPUSHTAIL;
-	if (name == "FPUSHAFTER") return Command::FPUSHAFTER;
-	if (name == "FPUSHBEFORE") return Command::FPUSHBEFORE;
-	if (name == "FDELHEAD") return Command::FDELHEAD;
-	if (name == "FDELTAIL") return Command::FDELTAIL;
-	if (name == "FDELAFTER") return Command::FDELAFTER;
-	if (name == "FDELBEFORE") return Command::FDELBEFORE;
-	if (name == "FDELVAL") return Command::FDELVAL;
-	if (name == "FGET") return Command::FGET;
-	if (name == "LPUSHHEAD") return Command::LPUSHHEAD;
-	if (name == "LPUSHTAIL") return Command::LPUSHTAIL;
-	if (name == "LPUSHAFTER") return Command::LPUSHAFTER;
-	if (name == "LPUSHBEFORE") return Command::LPUSHBEFORE;
-	if (name == "LDELHEAD") return Command::LDELHEAD;
-	if (name == "LDELTAIL") return Command::LDELTAIL;
-	if (name == "LDELAFTER") return Command::LDELAFTER;
-	if (name == "LDELBEFORE") return Command::LDELBEFORE;
-	if (name == "LDELVAL") return Command::LDELVAL;
-	if (name == "LGET") return Command::LGET;
-	if (name == "SPUSH") return Command::SPUSH;
-	if (name == "SPOP") return Command::SPOP;
-	if (name == "QPUSH") return Command::QPUSH;
-	if (name == "QPOP") return Command::QPOP;
-	if (name == "TINSERT") return Command::TINSERT;
-	if (name == "TDEL") return Command::TDEL;
-	if (name == "TGET") return Command::TGET;
-	if (name == "ISMEMBER") return Command::TGET;
-	if (name == "PRINT") return Command::PRINT;
-	if (name == "HELP") return Command::HELP;
-	if (name == "EXIT") return Command::EXIT;
-	return Command::UNKNOWN;
-}
-
-bool RunPrint(ProgramData* data, const vector<string>& words, string& error)
-{
-	return runPrint(words, data, error);
 }
 
 void RunHelp()
 {
-	cout << "M: MPUSH MINSERT MGET MDEL MSET MLEN" << endl;
-	cout << "F: FPUSHHEAD FPUSHTAIL FPUSHAFTER FPUSHBEFORE FDELHEAD FDELTAIL FDELAFTER FDELBEFORE FDELVAL FGET" << endl;
-	cout << "L: LPUSHHEAD LPUSHTAIL LPUSHAFTER LPUSHBEFORE LDELHEAD LDELTAIL LDELAFTER LDELBEFORE LDELVAL LGET" << endl;
-	cout << "S: SPUSH SPOP; Q: QPUSH QPOP; T: TINSERT TDEL TGET; PRINT; EXIT" << endl;
+	cout << "M: MPUSH MINSERT MGET MDEL MSET MLEN; "
+	     << "F: FPUSHHEAD FPUSHTAIL FPUSHAFTER FPUSHBEFORE "
+		 << "FDELHEAD FDELTAIL FDELAFTER FDELBEFORE FDELVAL FGET" << endl;
+	cout << "L: LPUSHHEAD LPUSHTAIL LPUSHAFTER LPUSHBEFORE LDELHEAD "
+		 << "LDELTAIL LDELAFTER LDELBEFORE LDELVAL LGET; S: SPUSH SPOP" << endl;
+	cout << "Q: QPUSH QPOP QGET; D: DQPUSH DQPOP DQGET; "
+	     << "B: BINSERT BDEL BGET; T: TINSERT TDEL TGET; PRINT; EXIT" << endl;
 }

@@ -1,2 +1,4 @@
 /dbms
 /laba1_rust/target/
+*.png
+*.docx

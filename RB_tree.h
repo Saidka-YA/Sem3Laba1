@@ -24,6 +24,7 @@ RBNode* RBFIXINSERT(RBNode* root, RBNode* element);
 RBNode* TINSERT(RBNode* root, int key);
 RBNode* TGET(RBNode* root, int key);
 void TPRINT(RBNode* value);
+RBNode* TRESTORE(RBNode* root, int key, Color color, bool hasParent, int parentKey);
 RBNode* RBFINDMIN(RBNode* value);
 RBNode* RBTRANSPLANT(RBNode* root, RBNode* oldValue, RBNode* newValue);
 Color RBGETCOLOR(RBNode* value);

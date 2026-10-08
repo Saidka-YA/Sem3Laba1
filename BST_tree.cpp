@@ -33,11 +33,11 @@ BSTNode* BSTINSERT(BSTNode* node, int data) {
 	else node->right = BSTINSERT(node->right, data);
 	return node;
 }
-int BSTSEARCH(BSTNode* root, int data) {
-	if (root == nullptr) return 0;
-	if (root->data == data) return root->data;
+bool BSTSEARCH(BSTNode* root, int data) {
+	if (root == nullptr) return false;
+	if (root->data == data) return true;
 	if (data < root->data) return BSTSEARCH(root->left, data);
-	else return BSTSEARCH(root->right, data);
+	return BSTSEARCH(root->right, data);
 }
 
 BSTNode* BSTFINDMIN(BSTNode* value) {

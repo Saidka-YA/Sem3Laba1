@@ -17,7 +17,7 @@ void BSTINORDER(BSTNode* node);
 void BSTPREORDER(BSTNode* node);
 void BSTPOSTORDER(BSTNode* node);
 BSTNode* BSTINSERT(BSTNode* node, int data);
-int BSTSEARCH(BSTNode* root, int data);
+bool BSTSEARCH(BSTNode* root, int data);
 BSTNode* BSTFINDMIN(BSTNode* value);
 BSTNode* BSTDELETE(BSTNode* node, int data);
 

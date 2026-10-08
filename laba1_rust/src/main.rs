@@ -1,4 +1,6 @@
-use laba1_rust::structures::{DoublyList, DynamicArray, Queue, SinglyList, Stack};
+use laba1_rust::{
+    BinarySearchTree, DoubleQueue, DoublyList, DynamicArray, Queue, SinglyList, Stack,
+};
 
 fn main() {
     let mut array = DynamicArray::default();
@@ -28,4 +30,18 @@ fn main() {
     queue.push("first".to_string());
     queue.push("last".to_string());
     println!("Очередь: удалён {:?}", queue.pop());
+
+    let mut double_queue = DoubleQueue::default();
+    double_queue.push_back("middle".to_string());
+    double_queue.push_front("first".to_string());
+    double_queue.push_back("last".to_string());
+    println!("Двусвязная очередь:");
+    double_queue.print();
+
+    let mut tree = BinarySearchTree::default();
+    for key in [10, 5, 15, 12, 20] {
+        tree.insert(key);
+    }
+    println!("Бинарное дерево поиска (симметричный обход):");
+    tree.print_inorder();
 }

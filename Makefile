@@ -2,7 +2,7 @@ CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -pedantic
 TARGET = dbms
 SOURCES = main.cpp interface.cpp data_file.cpp json_file.cpp Array.cpp linear_list.cpp \
-	DoubleLinearList.cpp stack.cpp DoubleQueue.cpp RB_tree.cpp
+	DoubleLinearList.cpp stack.cpp Queue.cpp DoubleQueue.cpp BST_tree.cpp RB_tree.cpp
 
 all: $(TARGET)
 

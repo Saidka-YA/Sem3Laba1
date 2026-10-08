@@ -120,9 +120,25 @@ RBNode* TGET(RBNode* root, int key) {
 
 void TPRINT(RBNode* value) {
     if (value == nullptr) return;
-    TPRINT(value->left);
     cout << value->key << ' ' << value->color << endl;
+    TPRINT(value->left);
     TPRINT(value->right);
+}
+
+RBNode* TRESTORE(RBNode* root, int key, Color color, bool hasParent, int parentKey) {
+    RBNode* node = new RBNode(key);
+    node->color = color;
+    if (!hasParent) return node;
+
+    RBNode* parent = TGET(root, parentKey);
+    if (parent == nullptr) {
+        delete node;
+        return root;
+    }
+    node->parent = parent;
+    if (key < parent->key) parent->left = node;
+    else parent->right = node;
+    return root;
 }
 
 RBNode* RBFINDMIN(RBNode* value) {
